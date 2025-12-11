@@ -9,7 +9,11 @@ ofed_pkg_mgr: yum
 ofed_repo_file_extension: repo
 
 # URL of the GPG key used to verify packages
-ofed_gpg_key_url: "{{ ofed_repository_url }}/{{ ofed_version }}/RPM-GPG-KEY-Mellanox"
+# Use the static Mellanox GPG key URL rather than a version‑dependent path.
+# Mellanox publishes a single RPM GPG key at this location for all OFED
+# releases.  Using a fixed URL avoids 404s when the version changes and
+# aligns with NVIDIA’s guidance to use the general key download link.
+ofed_gpg_key_url: "https://www.mellanox.com/downloads/ofed/RPM-GPG-KEY-Mellanox"
 
 # Name of the package group containing the InfiniBand drivers and tools.  This
 # group is installed using the package manager to bring in all necessary

@@ -60,6 +60,20 @@ inventory or playbook.  Significant variables include:
 Additional OS‑specific variables are defined under `vars/` and loaded by
 `tasks/variables.yml`.
 
+### Debian/Ubuntu/Proxmox specific variables
+
+Debian‑based distributions use the APT package manager and require
+repository keys to be stored in a keyring.  The role defines the
+following additional variables when `ansible_pkg_mgr` is `apt`:
+
+| Variable | Description |
+|---------|-------------|
+| `ofed_apt_keyrings_dir` | Directory where repository GPG keys are stored.  Defaults to `/etc/apt/keyrings`. |
+| `ofed_apt_key_filename` | Name of the Mellanox GPG key file (e.g. `mellanox_ofed.asc`). |
+| `ofed_apt_key_dest` | Full path to the key file under `ofed_apt_keyrings_dir`.  The role downloads the GPG key here and references it via the `signed‑by` directive. |
+| `ofed_sriov_grub_config` | Path to the GRUB configuration file on Debian/Proxmox systems.  Defaults to `/etc/default/grub`. |
+| `ofed_sriov_grub_params` | A list of dictionaries derived from `ofed_sriov_iommu_options` with keys `name` and optional `value`.  Used internally to update GRUB parameters idempotently. |
+
 ## Task summary
 
 ### Common initialisation
@@ -73,10 +87,17 @@ Additional OS‑specific variables are defined under `vars/` and loaded by
 
 ### Debian/Ubuntu/Proxmox
 
-1. **Import GPG key**: download the GPG key from `ofed_gpg_key_url` and
-   import it with the `apt_key` module.
-2. **Add repository file**: download the repository list to
-   `/etc/apt/sources.list.d/{{ ofed_repo_file_name }}` via `get_url`.
+1. **Create APT keyring and download GPG key**: ensure the keyring
+   directory (`ofed_apt_keyrings_dir`, default `/etc/apt/keyrings`) exists
+   and download the Mellanox GPG key from `ofed_gpg_key_url` into
+   `ofed_apt_key_dest`.  The role no longer uses the deprecated
+   `apt_key` module; instead it stores keys in `/etc/apt/keyrings` and
+   references them via `signed‑by`.
+2. **Add repository file**: download the vendor‑supplied repository list
+   to `/etc/apt/sources.list.d/{{ ofed_repo_file_name }}` via
+   `get_url` and insert a `signed‑by={{ ofed_apt_key_dest }}` directive
+   into the `deb` line.  This ensures APT trusts packages from the
+   Mellanox mirror when apt‑key is not used.
 3. **Remove conflicting packages**: if `ofed_remove_distro_packages` is
    true purge packages listed in `ofed_deb_remove_packages` (e.g.
    `libipathverbs1`, `librdmacm1`, `libibverbs1` etc.) using `apt`.
@@ -127,10 +148,20 @@ function (PF).  To enable SR‑IOV (or when vDPA is enabled) the role:
    `/sys/class/net/<iface>/device/sriov_numvfs`.  Use
    `ofed_sriov_num_vfs_map` overrides if provided; otherwise apply
    `ofed_sriov_num_vfs` uniformly.
-6. **Enable IOMMU and update boot loader**: append
-   `ofed_sriov_iommu_options` to the kernel command line.  On Debian
-   systems edit `/etc/default/grub` and run `update-grub`; on Red Hat
-   systems use `grubby --update-kernel=ALL`.
+6. **Enable IOMMU and update the boot loader**: configure kernel
+   parameters for SR‑IOV.  On Red Hat systems use `grubby` to append
+   `ofed_sriov_iommu_options` to all installed kernels.  On
+   Debian/Proxmox hosts the role parses
+   `ofed_sriov_iommu_options` into individual parameters and then
+   idempotently inserts or updates each one in
+   `GRUB_CMDLINE_LINUX_DEFAULT` within `/etc/default/grub`.  The
+   implementation mirrors the approach used in the
+   `pve_i915_sriov_dkms` role: first normalise the GRUB line so that
+   there is always a space between existing parameters and then use a
+   complex back‑reference regex to insert or update each parameter
+   without duplicating entries.  After modifying the file the role
+   runs `update-grub` and `update-initramfs` and triggers a reboot if
+   necessary.
 7. **Reboot**: instruct the caller to reboot if kernel parameters or
    kernel versions changed.
 

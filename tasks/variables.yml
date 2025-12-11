@@ -6,8 +6,12 @@
     file: "{{ item }}"
     name: ofed_os
   with_first_found:
-    - "{{ ansible_distribution | lower | regex_replace('^([^ ]+) .*', '\\1') }}.yml"
-    - "{{ ansible_os_family | lower }}.yml"
+    # Try the exact distribution name first (with spaces removed).  Do not
+    # lowercase the name so that file names such as `RedHat.yml` and
+    # `Proxmox.yml` match correctly.  If no distribution‑specific file
+    # exists fall back to an OS family file and then to default.yml.
+    - "{{ ansible_distribution | regex_replace('^([^ ]+) .*', '\\1') }}.yml"
+    - "{{ ansible_os_family }}.yml"
     - "default.yml"
 
 - name: Set OFED repository distribution string
@@ -24,3 +28,16 @@
   set_fact:
     ofed_repo_file_name: "mellanox_mlnx_ofed.{{ ofed_os.ofed_repo_file_extension }}"
     ofed_repo_url: "{{ ofed_repository_url }}/{{ ofed_version }}/{{ ofed_repo_dist_name }}/{{ ofed_repo_file_name }}"
+
+# When using the APT package manager set variables for the keyring
+# directory and Mellanox GPG key location.  These variables are used
+# by the Debian/Ubuntu/Proxmox installation tasks to download the key
+# into the `/etc/apt/keyrings` directory and reference it via the
+# `signed-by` mechanism.  Only set these variables on systems where
+# the package manager is apt; on Red Hat systems they are unused.
+- name: Set APT keyring variables
+  set_fact:
+    ofed_apt_keyrings_dir: "/etc/apt/keyrings"
+    ofed_apt_key_filename: "mellanox_ofed.asc"
+    ofed_apt_key_dest: "{{ ofed_apt_keyrings_dir }}/{{ ofed_apt_key_filename }}"
+  when: ansible_pkg_mgr == 'apt'

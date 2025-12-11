@@ -1,18 +1,48 @@
 ---
-# Debian/Ubuntu specific installation tasks
+# Debian/Ubuntu/Proxmox specific installation tasks
 
-- name: Ensure GPG key is installed
-  apt_key:
+# Create the APT keyrings directory.  Debian‑based distributions
+# require repository keys to be stored in `/etc/apt/keyrings` rather
+# than using the deprecated apt‑key utility.
+- name: Ensure the apt keyrings directory exists
+  file:
+    path: "{{ ofed_apt_keyrings_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: ansible_pkg_mgr == 'apt'
+
+# Download the Mellanox GPG key into the keyrings directory.  A static
+# key URL is used so that the key is always available even when the
+# default OFED version changes.
+- name: Download the Mellanox OFED GPG key
+  get_url:
     url: "{{ ofed_os.ofed_gpg_key_url }}"
-    state: present
-  register: ofed_deb_key
+    dest: "{{ ofed_apt_key_dest }}"
+    mode: '0644'
+    force: true
+  when: ansible_pkg_mgr == 'apt'
 
+# Download the Mellanox OFED APT repository file.  The vendor
+# repository file contains the correct deb line for each distribution.
 - name: Download Mellanox OFED APT repository file
   get_url:
     url: "{{ ofed_repo_url }}"
     dest: "/etc/apt/sources.list.d/{{ ofed_repo_file_name }}"
     mode: '0644'
-  register: ofed_deb_repo_file
+    force: true
+
+# Ensure the repository file includes a signed‑by option pointing to
+# the downloaded key.  Without this apt will refuse to install
+# unsigned packages when apt-key is not used.  The regex matches
+# deb lines and inserts the signed‑by directive at the beginning.
+- name: Ensure repository file uses the apt keyring
+  replace:
+    path: "/etc/apt/sources.list.d/{{ ofed_repo_file_name }}"
+    regexp: '^deb\s+'
+    replace: 'deb [signed-by={{ ofed_apt_key_dest }}] '
+  when: ansible_pkg_mgr == 'apt'
 
 - name: Remove conflicting distribution packages
   apt:

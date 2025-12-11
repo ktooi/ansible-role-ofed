@@ -5,3 +5,28 @@
   service:
     name: openibd
     state: restarted
+
+# Update the GRUB configuration on Debian/Proxmox systems.  This runs
+# `update-grub` to regenerate the GRUB menu and apply changes to
+# GRUB_CMDLINE_LINUX_DEFAULT.
+- name: update-grub
+  command: update-grub
+  when: ansible_os_family == 'Debian'
+
+# Update the initramfs after modifying kernel parameters.  This is
+# necessary for certain parameters (e.g. IOMMU settings) to take effect
+# during early boot.
+- name: update-initramfs
+  command: update-initramfs -u -k all
+  when: ansible_os_family == 'Debian'
+
+# Reboot the host to apply new kernel parameters.  Only triggered when
+# SR‑IOV is enabled and the kernel parameters were changed.
+- name: reboot-for-sriov
+  reboot:
+    msg: "Rebooting to apply updated GRUB kernel parameters for SR‑IOV"
+    connect_timeout: 5
+    reboot_timeout: 600
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+  when: ofed_update_kernel and ansible_os_family == 'Debian'

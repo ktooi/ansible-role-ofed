@@ -15,7 +15,7 @@ Most variables have sane defaults so the role can be executed without any config
 | Variable | Default | Description |
 |---------|---------|-------------|
 | `ofed_version` | `"latest-24.10"` | Release of the Mellanox OFED repository to use.  By default the role targets the latest sub‑release of the 24.10 long‑term support (LTS) branch (e.g. 24.10‑3.2.5.0).  NVIDIA states that 24.10 is the final standalone MLNX_OFED LTS release and will receive updates for three years. |
-| `ofed_repository_url` | `"https://linux.mellanox.com/public/repo/mlnx_ofed"` | Base URL for the Mellanox public repository.  The vendor documentation instructs users to download the `.repo`/`.list` file from this repository. |
+| `ofed_repository_url` | `"https://linux.mellanox.com/public/repo/mlnx_ofed"` | Base URL for the Mellanox public repository.  The vendor documentation instructs users to download the `.repo`/`.list` file from this repository.  In this role the repository list is downloaded and then modified to reference the downloaded GPG key via the `signed‑by` directive. |
 | `ofed_target_release` | *empty* | Optional override for the distribution flavour in the repository path (e.g. `rhel7.9`, `ubuntu22.04`).  When unset the role derives the correct value from `ansible_distribution` and `ansible_distribution_version`. |
 | `ofed_update_kernel` | `true` | Whether to install and activate the kernel that matches the Mellanox driver. |
 | `ofed_nobest` | `false` | Pass the `--nobest` flag to the package manager when installing kernels under Red Hat systems. |
@@ -59,7 +59,7 @@ This example installs the latest Mellanox OFED driver, ensures that the correct 
 
 ## Notes
 
-* **Repository files**:  The role downloads the appropriate repository file (`.repo` for Red Hat, `.list` for Debian/Ubuntu) from the Mellanox public mirror.  The vendor documentation explains that this is the recommended method for adding the repository.
+* **Repository files**:  The role downloads the appropriate repository file (`.repo` for Red Hat, `.list` for Debian/Ubuntu/Proxmox) from the Mellanox public mirror.  For Debian‑based systems it then inserts a `signed‑by` directive referencing the downloaded GPG key so that APT will trust the repository without using the deprecated `apt‑key` mechanism.  The vendor documentation recommends adding the repository via these files.
 * **Removing conflicting packages**:  On Debian/Ubuntu/Proxmox systems the role purges a list of packages (e.g. `libipathverbs1`, `librdmacm1`, `libibverbs1`, `libmthca1`, `openmpi-bin`, `ibverbs-utils`, `infiniband-diags`, `ibutils`, `perftest`) prior to installation, as recommended by NVIDIA.  The cited lines show the command to remove these packages using `apt-get`; they are not a version number but an instruction for preparing the system.  You can disable this behaviour by setting `ofed_remove_distro_packages` to false.
 * **Kernel updates**:  On Red Hat family systems the role attempts to match the installed Mellanox `kmod-mlnx-ofa_kernel` package to a corresponding `kernel` package.  If `ofed_update_kernel` is enabled, the role installs the matching kernel and updates GRUB to boot it by default.
 * **Managing openib.conf**:  If `ofed_manage_openib_conf` is true, the role deploys a Jinja2 template for `/etc/infiniband/openib.conf` with flags such as `FORCE_MODE` and `RDMA_UCM_LOAD` set according to variables.  The `openibd` service is notified to restart when this file changes.

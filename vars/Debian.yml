@@ -7,8 +7,13 @@ ofed_pkg_mgr: apt
 # Extension for the repository file downloaded from the Mellanox mirror
 ofed_repo_file_extension: list
 
-# URL of the GPG key used to verify packages.
-ofed_gpg_key_url: "{{ ofed_repository_url }}/{{ ofed_version }}/RPM-GPG-KEY-Mellanox"
+# URL of the GPG key used to verify packages.  This is the same key used
+# in the StackHPC role and vendor instructions.
+# Use a static GPG key URL published by Mellanox.  Unlike the versioned
+# URLs on the Mellanox mirror, this link always points to the current
+# RPM GPG key used to sign OFED packages.  Switching to a fixed URL
+# prevents broken links when the default version changes.
+ofed_gpg_key_url: "https://www.mellanox.com/downloads/ofed/RPM-GPG-KEY-Mellanox"
 
 # Packages provided by the distribution that conflict with MLNX_OFED.  The
 # NVIDIA documentation lists these packages for Ubuntu and Debian and

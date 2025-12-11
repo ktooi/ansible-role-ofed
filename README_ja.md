@@ -22,7 +22,7 @@ Ubuntu 20.04/22.04/24.04、Debian 11/12、Proxmox 7/8、Red Hat 7/8/9
 | 変数 | デフォルト | 説明 |
 |------|----------|------|
 | `ofed_version` | `"latest-24.10"` | 使用する Mellanox OFED リポジトリのリリース。デフォルトでは 24.10 の長期サポート（LTS）ブランチの最新サブリリース（例: 24.10‑3.2.5.0）をターゲットにします。NVIDIA によれば、24.10 は最後のスタンドアロン MLNX_OFED LTS リリースであり、3 年間の更新が提供されます。 |
-| `ofed_repository_url` | `"https://linux.mellanox.com/public/repo/mlnx_ofed"` | Mellanox 公開リポジトリのベース URL。ベンダーのドキュメントでは、このリポジトリから `.repo`/`.list` ファイルをダウンロードする方法を推奨しています。 |
+| `ofed_repository_url` | `"https://linux.mellanox.com/public/repo/mlnx_ofed"` | Mellanox 公開リポジトリのベース URL。ベンダーのドキュメントでは、このリポジトリから `.repo`/`.list` ファイルをダウンロードする方法を推奨しています。Debian 系ではダウンロードした `.list` ファイルに `signed-by` ディレクティブを挿入し、ダウンロードした GPG キーを参照します。 |
 | `ofed_target_release` | *空* | リポジトリパス内のディストリビューション名を明示的に指定する場合に使用します（例: `rhel7.9`、`ubuntu22.04`）。未設定の場合は `ansible_distribution` と `ansible_distribution_version` から自動的に算出します。 |
 | `ofed_update_kernel` | `true` | Mellanox ドライバーに対応したカーネルをインストールして起動させるかどうか。Red Hat 系ではデフォルトで有効となっており、GRUB を更新します。 |
 | `ofed_nobest` | `false` | Red Hat 系でカーネルをインストールする際、`dnf` に `--nobest` オプションを渡すかどうか。 |
@@ -66,7 +66,7 @@ OS ごとの追加変数は `vars/` ディレクトリに定義されており�
 
 ## メモ
 
-* **リポジトリファイル**: ロールは Mellanox 公開ミラーから適切なリポジトリファイル (`.repo` は Red Hat 系、`.list` は Debian/Ubuntu 系) をダウンロードします。これはベンダーが推奨する方法です。
+* **リポジトリファイル**: ロールは Mellanox 公開ミラーから適切なリポジトリファイル (`.repo` は Red Hat 系、`.list` は Debian/Ubuntu/Proxmox 系) をダウンロードします。Debian 系では、ダウンロードした `.list` ファイルに `signed-by` ディレクティブを追加し、`/etc/apt/keyrings` に保存した GPG キーを参照することで、廃止予定の `apt-key` を使用せずにリポジトリを信頼します。これはベンダーが推奨する方法です。
 * **競合パッケージの削除**: Debian/Ubuntu/Proxmox システムでは、インストール前に `libipathverbs1`、`librdmacm1`、`libibverbs1`、`libmthca1`、`openmpi-bin`、`ibverbs-utils`、`infiniband-diags`、`ibutils`、`perftest` などのパッケージを purge します。引用している行はこれらのパッケージを削除する `apt-get` コマンドを示しており、バージョン指定ではありません。これを無効にしたい場合は `ofed_remove_distro_packages` を false に設定してください。
 * **カーネル更新**: Red Hat 系ディストリビューションでは、Mellanox の `kmod-mlnx-ofa_kernel` パッケージに一致する `kernel` パッケージを検出し、インストールします。`ofed_update_kernel` が有効な場合、該当するカーネルをインストールし、GRUB のデフォルトエントリを更新します。
 * **openib.conf の管理**: `ofed_manage_openib_conf` が true の場合、Jinja2 テンプレートを `/etc/infiniband/openib.conf` に展開し、`FORCE_MODE` や `RDMA_UCM_LOAD` を変数に従って設定します。ファイルが変更された場合は `openibd` サービスを再起動します。

@@ -63,27 +63,93 @@
   vars:
     lookup_map: "{{ ofed_sriov_num_vfs_map | default({}) }}"
 
-- name: Ensure kernel IOMMU options are present in GRUB (Debian/Proxmox)
-  lineinfile:
-    path: /etc/default/grub
-    regexp: '^GRUB_CMDLINE_LINUX_DEFAULT="(.*)"'
-    line: 'GRUB_CMDLINE_LINUX_DEFAULT="\1 {{ ofed_sriov_iommu_options }}"'
-    backrefs: yes
+  
+#---------------------------------------------------------------
+# GRUB configuration for SR‑IOV on Debian/Proxmox
+#
+# The default implementation simply appended kernel options to the
+# GRUB_CMDLINE_LINUX_DEFAULT string.  This could lead to duplicated
+# parameters or clobber existing options managed by other roles.  To
+# interoperate cleanly with other Ansible roles we adopt the same
+# approach as the `pve_i915_sriov_dkms` role: first normalise the
+# command line so there is always a space between pre‑existing and new
+# parameters, then iterate over each desired kernel parameter and
+# insert or update it idempotently.  The variable
+# `ofed_sriov_grub_params` (constructed below) holds a list of
+# dictionaries with `name` and optional `value` keys derived from
+# `ofed_sriov_iommu_options`.
+
+# Build the list of GRUB parameters from ofed_sriov_iommu_options.  Each
+# whitespace‑separated token is split on '='; the part before '=' is
+# treated as the parameter name and the part after (if present) as the
+# value.  Parameters without a value (rare for IOMMU options) will be
+# added without an '=' sign.
+- name: Build list of SR‑IOV kernel parameters
+  set_fact:
+    ofed_sriov_grub_params: >-
+      {%- set params = [] -%}
+      {%- for token in ofed_sriov_iommu_options.split() -%}
+        {%- set kv = token.split('=', 1) -%}
+        {%- if kv | length > 1 -%}
+          {%- set _ = params.append({'name': kv[0], 'value': kv[1]}) -%}
+        {%- else -%}
+          {%- set _ = params.append({'name': kv[0]}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ params }}
   when: ansible_os_family == 'Debian'
 
-- name: Update GRUB configuration on Debian
-  command: update-grub
+# Prepare the GRUB command line by ensuring that there is always a space
+# between the first and second captured group.  Without this the
+# complex regex in the next task cannot distinguish whether the
+# existing string is empty.  This task is idempotent and will not
+# change the configuration if a space is already present.
+- name: Prepare GRUB_CMDLINE_LINUX_DEFAULT for SR‑IOV
+  lineinfile:
+    path: "/etc/default/grub"
+    regexp: '^GRUB_CMDLINE_LINUX_DEFAULT="([^ ]*) ?(.*?)"'
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT="\1 \2"'
+    backrefs: true
   when: ansible_os_family == 'Debian'
+
+# Insert or update each SR‑IOV kernel parameter in the GRUB command line.
+# This loop uses advanced backreferences to detect existing parameters
+# and either replace them or append new ones, preserving spacing and
+# order.  It is adapted from the pve_i915_sriov_dkms role which
+# implements similar logic for i915 parameters.
+- name: Ensure SR‑IOV kernel parameters in GRUB
+  lineinfile:
+    path: "/etc/default/grub"
+    regexp: '^GRUB_CMDLINE_LINUX_DEFAULT=(?P<is_blank>(?={{ blank_pat }}))?(?P<is_first>(?=" *{{ param_name + param_equal }}.*))?(?(is_first)|(?=.*(?P<blank> )))?" *(?(is_blank)|(?P<has_param>(?=.*{{ param_pat }}))?(?(has_param){{ update_pat }}|{{ new_pat }})) *" *'
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT="\g<new_exist>\g<upd_pre>\g<blank>{{ item.name }}{{ "=" + item.value if item.value is defined }}\g<upd_suf>"'
+    backrefs: true
+    vars:
+      blank_pat: '" *"'
+      param_name: "{{ item.name | regex_escape }}"
+      param_equal: '{{ "=" if item.value is defined }}'
+      param_pat: ' *(?<![a-z0-9._-]){{ param_name }}{{ "=[^ ]*" if item.value is defined }}(?![a-z0-9._-])'
+      update_pat: "(?P<upd_pre>.*?){{ param_pat }} *?(?P<upd_suf> ?.*?)"
+      new_pat: "(?P<new_exist>.*)"
+    loop: "{{ ofed_sriov_grub_params }}"
+    when: ansible_os_family == 'Debian'
+    notify:
+      - update-grub
+      - update-initramfs
+      - reboot-for-sriov
 
 - name: Add kernel IOMMU options via grubby on RedHat
   command: grubby --update-kernel=ALL --args="{{ ofed_sriov_iommu_options }}"
   when: ansible_os_family == 'RedHat'
 
-- name: Reboot after enabling SR‑IOV (if kernel changed)
+# On Red Hat systems the role performs a reboot after adding kernel
+# parameters via grubby and potentially installing a new kernel.  On
+# Debian/Proxmox systems reboots are triggered by the handlers when
+# GRUB configuration changes.
+- name: Reboot after enabling SR‑IOV on RedHat
   reboot:
     msg: "Rebooting to apply SR‑IOV kernel parameters"
     connect_timeout: 5
     reboot_timeout: 600
     pre_reboot_delay: 0
     post_reboot_delay: 30
-  when: ofed_update_kernel
+  when: ofed_update_kernel and ansible_os_family != 'Debian'
