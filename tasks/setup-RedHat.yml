@@ -28,8 +28,10 @@
   include_tasks: kernel.yml
   when: ofed_update_kernel
 
+# Start the openibd service only when managing openib configuration.
 - name: Ensure openibd service is enabled and started
   service:
     name: openibd
     enabled: yes
     state: started
+  when: ofed_manage_openib_conf

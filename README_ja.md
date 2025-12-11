@@ -35,7 +35,7 @@ Ubuntu 20.04/22.04/24.04、Debian 11/12、Proxmox 7/8、Red Hat 7/8/9
 | `ofed_sriov_interfaces` | `[]` | SR‑IOV を有効にする物理インターフェース名または PCI アドレスのリスト。各インターフェースには `ofed_sriov_num_vfs` で指定された数の VF を作成しますが、`ofed_sriov_num_vfs_map` で個別に上書きできます。 |
 | `ofed_sriov_num_vfs` | `8` | SR‑IOV が有効な場合に、各インターフェースに作成する仮想関数のデフォルト数。 |
 | `ofed_sriov_num_vfs_map` | `{}` | インターフェース名や PCI アドレスをキーに VF 数を個別指定するマッピング。 |
-| `ofed_sriov_iommu_options` | `"intel_iommu=on iommu=pt pci=realloc"` | SR‑IOV 有効時に GRUB に追加するカーネルパラメータ。AMD システムでは適宜変更してください。 |
+| `ofed_sriov_iommu_options` | `""` (空の場合、自動検出) | SR‑IOV 有効時に GRUB に追加するカーネルパラメータ。値を空にするとロールが CPU ベンダーに応じて適切なデフォルトを選択します。Intel システムでは `intel_iommu=on iommu=pt pci=realloc`、AMD システムでは `amd_iommu=on iommu=pt` が自動的に設定されます。 |
 | `ofed_enable_vdpa` | `false` | vDPA (virtio Data Path Acceleration) を有効にします。`true` の場合、`vhost_vdpa` モジュールをロードし、eswitch モードを設定し、vDPA デバイスを作成します。vDPA は SR‑IOV に依存するため、`ofed_enable_sriov` が `false` でも vDPA を有効にすると SR‑IOV 設定が実行されます。 |
 | `ofed_vdpa_eswitch_mode` | `"switchdev"` | vDPA 有効時に物理 NIC に設定する eswitch モード（ハードウェアオフロードには通常 `switchdev` を使用します）。 |
 | `ofed_vdpa_pf_devices` | `[]` | vDPA を有効にする物理関数 (PF) の PCI アドレスのリスト。空の場合は `ofed_sriov_interfaces` から派生した PF を使用します。 |
@@ -66,10 +66,10 @@ OS ごとの追加変数は `vars/` ディレクトリに定義されており�
 
 ## メモ
 
-* **リポジトリファイル**: ロールは Mellanox 公開ミラーから適切なリポジトリファイル (`.repo` は Red Hat 系、`.list` は Debian/Ubuntu/Proxmox 系) をダウンロードします。Debian 系では、ダウンロードした `.list` ファイルに `signed-by` ディレクティブを追加し、`/etc/apt/keyrings` に保存した GPG キーを参照することで、廃止予定の `apt-key` を使用せずにリポジトリを信頼します。これはベンダーが推奨する方法です。
+* **リポジトリファイル**: Red Hat 系では `yum_repository` モジュールで `.repo` ファイルを作成し、GPG キーとベース URL を指定します。Debian/Ubuntu/Proxmox 系ではベンダー提供の `.list` ファイルをダウンロードするのではなく、Jinja2 テンプレートから `.list` を生成します。テンプレートは `ofed_repository_url`、`ofed_version`、`ofed_repo_dist_name` から `deb` 行を構築し、`signed-by={{ ofed_apt_key_dest }}` ディレクティブで `/etc/apt/keyrings` に保存した GPG キーを参照します。これによりローカルミラーなどへの柔軟な切り替えが可能となり、非推奨の `apt-key` を使用する必要がありません。
 * **競合パッケージの削除**: Debian/Ubuntu/Proxmox システムでは、インストール前に `libipathverbs1`、`librdmacm1`、`libibverbs1`、`libmthca1`、`openmpi-bin`、`ibverbs-utils`、`infiniband-diags`、`ibutils`、`perftest` などのパッケージを purge します。引用している行はこれらのパッケージを削除する `apt-get` コマンドを示しており、バージョン指定ではありません。これを無効にしたい場合は `ofed_remove_distro_packages` を false に設定してください。
 * **カーネル更新**: Red Hat 系ディストリビューションでは、Mellanox の `kmod-mlnx-ofa_kernel` パッケージに一致する `kernel` パッケージを検出し、インストールします。`ofed_update_kernel` が有効な場合、該当するカーネルをインストールし、GRUB のデフォルトエントリを更新します。
-* **openib.conf の管理**: `ofed_manage_openib_conf` が true の場合、Jinja2 テンプレートを `/etc/infiniband/openib.conf` に展開し、`FORCE_MODE` や `RDMA_UCM_LOAD` を変数に従って設定します。ファイルが変更された場合は `openibd` サービスを再起動します。
+* **openib.conf の管理**: `ofed_manage_openib_conf` が true の場合にのみ、Jinja2 テンプレートを `/etc/infiniband/openib.conf` に展開します。また、この変数が true のときだけ `openibd` サービスを有効化・起動します。InfiniBand を利用しない環境では `ofed_manage_openib_conf` を false のままにしておくことで、`openibd` の起動を抑制できます。
 * **Proxmox VE サポート**: Proxmox ホストは Debian 派生として扱われます。`ansible_distribution` が `Proxmox VE` に一致する場合、自動的に Debian 用のパッケージマネージャとリポジトリ設定が使用されます。
 * **SR‑IOV サポート**: `ofed_enable_sriov` を true にすると SR‑IOV を有効にします。`mlxconfig` でファームウェアフラグを設定し、GRUB に IOMMU オプションを追加し、各指定インターフェースに VF を作成します。全インターフェースの VF 数は `ofed_sriov_num_vfs` で指定できますが、個別に `ofed_sriov_num_vfs_map` で上書きできます。必要なツール (`iproute2` など) をインストールし、変更が必要な場合は再起動が必要です。
 * **vDPA サポート**: `ofed_enable_vdpa` を true にすると、ハードウェア vDPA 加速を設定します。`vhost_vdpa` モジュールをロードし、`devlink` で Mellanox NIC の eswitch モードを `switchdev` に設定し、必要に応じて `ofed_vdpa_devices` で指定された vDPA デバイスを作成します。各デバイスには名前、管理対象 VF の PCI アドレス、および任意の MAC アドレスを指定できます。vDPA は SR‑IOV に依存するため、`ofed_enable_vdpa` が true の場合は `ofed_sriov_interfaces`（または `ofed_vdpa_pf_devices`）を必ず指定し、ロールが必要な仮想関数を作成できるようにしてください。これにより virtio‑vDPA 加速 VM のデプロイ基盤を提供します。

@@ -41,3 +41,24 @@
     ofed_apt_key_filename: "mellanox_ofed.asc"
     ofed_apt_key_dest: "{{ ofed_apt_keyrings_dir }}/{{ ofed_apt_key_filename }}"
   when: ansible_pkg_mgr == 'apt'
+
+# Choose sensible default IOMMU kernel parameters based on CPU vendor.  If
+# ``ofed_sriov_iommu_options`` is already defined by the caller then
+# preserve it verbatim.  Otherwise inspect the ``ansible_processor`` fact
+# to determine whether the system contains an AMD or Intel CPU and
+# assign appropriate defaults.  On AMD systems ``amd_iommu=on iommu=pt``
+# is commonly used; on Intel systems ``intel_iommu=on iommu=pt pci=realloc``
+# provides good performance.
+- name: Determine default SR‑IOV IOMMU options
+  set_fact:
+    ofed_sriov_iommu_options_resolved: >-
+      {% if ofed_sriov_iommu_options is defined and (ofed_sriov_iommu_options | string | length > 0) %}
+        {{ ofed_sriov_iommu_options }}
+      {% else %}
+        {% set cpu = (ansible_processor | default([])) | join(' ') | lower %}
+        {% if 'amd' in cpu %}
+          amd_iommu=on iommu=pt
+        {% else %}
+          intel_iommu=on iommu=pt pci=realloc
+        {% endif %}
+      {% endif %}

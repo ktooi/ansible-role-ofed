@@ -3,7 +3,10 @@
 
 ofed_pkg_mgr: apt
 ofed_repo_file_extension: list
-ofed_gpg_key_url: "{{ ofed_repository_url }}/{{ ofed_version }}/RPM-GPG-KEY-Mellanox"
+# Use the static Mellanox GPG key URL.  A fixed URL avoids 404s when
+# the OFED version changes and follows NVIDIA’s recommendation to
+# download the key directly from mellanox.com.
+ofed_gpg_key_url: "https://www.mellanox.com/downloads/ofed/RPM-GPG-KEY-Mellanox"
 ofed_deb_remove_packages:
   - libipathverbs1
   - librdmacm1

@@ -88,7 +88,7 @@
   set_fact:
     ofed_sriov_grub_params: >-
       {%- set params = [] -%}
-      {%- for token in ofed_sriov_iommu_options.split() -%}
+      {%- for token in ofed_sriov_iommu_options_resolved.split() -%}
         {%- set kv = token.split('=', 1) -%}
         {%- if kv | length > 1 -%}
           {%- set _ = params.append({'name': kv[0], 'value': kv[1]}) -%}
@@ -138,7 +138,7 @@
       - reboot-for-sriov
 
 - name: Add kernel IOMMU options via grubby on RedHat
-  command: grubby --update-kernel=ALL --args="{{ ofed_sriov_iommu_options }}"
+  command: grubby --update-kernel=ALL --args="{{ ofed_sriov_iommu_options_resolved }}"
   when: ansible_os_family == 'RedHat'
 
 # On Red Hat systems the role performs a reboot after adding kernel

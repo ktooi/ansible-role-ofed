@@ -24,26 +24,20 @@
     force: true
   when: ansible_pkg_mgr == 'apt'
 
-# Download the Mellanox OFED APT repository file.  The vendor
-# repository file contains the correct deb line for each distribution.
-- name: Download Mellanox OFED APT repository file
-  get_url:
-    url: "{{ ofed_repo_url }}"
+# Deploy a custom APT repository file from a template.  The template
+# constructs a deb line using the repository URL, OFED version and
+# distribution name.  It includes the ``signed-by`` directive to
+# reference the downloaded key.  This approach allows users to
+# override the base repository (e.g. when using a local mirror) via
+# variables rather than editing a downloaded file.
+- name: Deploy Mellanox OFED APT repository file
+  template:
+    src: ofed_apt_repo.list.j2
     dest: "/etc/apt/sources.list.d/{{ ofed_repo_file_name }}"
+    owner: root
+    group: root
     mode: '0644'
-    force: true
-
-# Ensure the repository file includes a signed‑by option pointing to
-# the downloaded key.  Without this apt will refuse to install
-# unsigned packages when apt-key is not used.  The regex matches
-# deb lines and inserts the signed‑by directive at the beginning.
-- name: Ensure repository file uses the apt keyring
-  replace:
-    path: "/etc/apt/sources.list.d/{{ ofed_repo_file_name }}"
-    regexp: '^deb\s+'
-    replace: 'deb [signed-by={{ ofed_apt_key_dest }}] '
   when: ansible_pkg_mgr == 'apt'
-
 - name: Remove conflicting distribution packages
   apt:
     name: "{{ item }}"
@@ -68,3 +62,4 @@
     name: openibd
     enabled: yes
     state: started
+  when: ofed_manage_openib_conf

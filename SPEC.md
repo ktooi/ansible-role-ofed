@@ -49,10 +49,8 @@ inventory or playbook.  Significant variables include:
 | `ofed_sriov_interfaces` | List of interface names or PCI addresses to configure for SR‑IOV. |
 | `ofed_sriov_num_vfs` | Default number of virtual functions (VFs) per physical interface. |
 | `ofed_sriov_num_vfs_map` | Per‑interface override mapping of VF counts. |
-| `ofed_sriov_iommu_options` | Kernel command line options to enable IOMMU/passthrough (e.g. `intel_iommu=on iommu=pt pci=realloc`). |
-| `ofed_enable_vdpa` | Enable vDPA configuration on Mellanox devices.  vDPA
-  relies on SR‑IOV: if `ofed_enable_vdpa` is set the role will also run
-  the SR‑IOV tasks. |
+| `ofed_sriov_iommu_options` | Kernel command line options to enable IOMMU/passthrough.  When left empty the role automatically chooses sensible defaults based on CPU vendor: on Intel systems it uses `intel_iommu=on iommu=pt pci=realloc`, while on AMD systems it uses `amd_iommu=on iommu=pt`. |
+| `ofed_enable_vdpa` | Enable vDPA configuration on Mellanox devices.  vDPA relies on SR‑IOV: if `ofed_enable_vdpa` is set the role will also run the SR‑IOV tasks. |
 | `ofed_vdpa_eswitch_mode` | Eswitch mode to apply to PFs when enabling vDPA (`switchdev` recommended). |
 | `ofed_vdpa_pf_devices` | PCI addresses of physical functions on which to enable vDPA.  If empty the role derives PFs from `ofed_sriov_interfaces`. |
 | `ofed_vdpa_devices` | List of vDPA devices to create; each dictionary includes `name`, `mgmtdev` (VF PCI address) and optional `mac`. |
@@ -93,18 +91,23 @@ following additional variables when `ansible_pkg_mgr` is `apt`:
    `ofed_apt_key_dest`.  The role no longer uses the deprecated
    `apt_key` module; instead it stores keys in `/etc/apt/keyrings` and
    references them via `signed‑by`.
-2. **Add repository file**: download the vendor‑supplied repository list
-   to `/etc/apt/sources.list.d/{{ ofed_repo_file_name }}` via
-   `get_url` and insert a `signed‑by={{ ofed_apt_key_dest }}` directive
-   into the `deb` line.  This ensures APT trusts packages from the
-   Mellanox mirror when apt‑key is not used.
+2. **Create repository file from a template**: render a Jinja2 template
+   into `/etc/apt/sources.list.d/{{ ofed_repo_file_name }}`.  The
+   template constructs a `deb` line using `ofed_repository_url`,
+   `ofed_version` and `ofed_repo_dist_name` and includes the
+   `signed‑by={{ ofed_apt_key_dest }}` directive.  This approach
+   facilitates overriding the base URL (e.g. pointing to a local mirror)
+   without editing a downloaded vendor file.
 3. **Remove conflicting packages**: if `ofed_remove_distro_packages` is
    true purge packages listed in `ofed_deb_remove_packages` (e.g.
    `libipathverbs1`, `librdmacm1`, `libibverbs1` etc.) using `apt`.
 4. **Update package cache**: run `apt` with `update_cache: yes`.
 5. **Install OFED packages**: install the packages specified by
    `ofed_deb_packages`.
-6. **Enable openibd service**: ensure `openibd` is enabled and started.
+6. **Enable openibd service** (optional): if `ofed_manage_openib_conf`
+   is true then enable and start the `openibd` service.  Systems that
+   do not use InfiniBand or RDMA can leave `ofed_manage_openib_conf`
+   false to avoid starting the service.
 
 ### Red Hat family (EL7/8/9)
 
@@ -119,7 +122,10 @@ following additional variables when `ansible_pkg_mgr` is `apt`:
    version of the `kmod‑mlnx‑ofa_kernel` package and install the
    corresponding `kernel-<version>` package.  Update the default boot
    entry with `grub2-set-default` and regenerate GRUB configuration.
-5. **Enable openibd service**: enable and start `openibd`.
+5. **Enable openibd service** (optional): enable and start the
+   `openibd` service only when `ofed_manage_openib_conf` is true.  If
+   InfiniBand support is not required this variable can be left
+   false to skip starting the daemon.
 
 ### Managing `openib.conf`
 
@@ -149,19 +155,22 @@ function (PF).  To enable SR‑IOV (or when vDPA is enabled) the role:
    `ofed_sriov_num_vfs_map` overrides if provided; otherwise apply
    `ofed_sriov_num_vfs` uniformly.
 6. **Enable IOMMU and update the boot loader**: configure kernel
-   parameters for SR‑IOV.  On Red Hat systems use `grubby` to append
-   `ofed_sriov_iommu_options` to all installed kernels.  On
-   Debian/Proxmox hosts the role parses
-   `ofed_sriov_iommu_options` into individual parameters and then
-   idempotently inserts or updates each one in
-   `GRUB_CMDLINE_LINUX_DEFAULT` within `/etc/default/grub`.  The
-   implementation mirrors the approach used in the
-   `pve_i915_sriov_dkms` role: first normalise the GRUB line so that
-   there is always a space between existing parameters and then use a
-   complex back‑reference regex to insert or update each parameter
-   without duplicating entries.  After modifying the file the role
-   runs `update-grub` and `update-initramfs` and triggers a reboot if
-   necessary.
+   parameters for SR‑IOV.  The role computes a set of default IOMMU
+   options at runtime based on CPU vendor: on Intel systems it uses
+   `intel_iommu=on iommu=pt pci=realloc`, while on AMD systems it uses
+   `amd_iommu=on iommu=pt`.  Callers can override
+   these defaults by setting `ofed_sriov_iommu_options`.  On Red Hat
+   systems use `grubby` to append the resolved options to all installed
+   kernels.  On Debian/Proxmox hosts the role splits the resolved
+   options into individual parameters and then idempotently inserts or
+   updates each one in `GRUB_CMDLINE_LINUX_DEFAULT` within
+   `/etc/default/grub`.  The implementation mirrors the approach used
+   in the `pve_i915_sriov_dkms` role: first normalise the GRUB line so
+   that there is always a space between existing parameters and then
+   use a complex back‑reference regex to insert or update each
+   parameter without duplicating entries.  After modifying the file
+   the role runs `update-grub` and `update-initramfs` and triggers a
+   reboot if necessary.
 7. **Reboot**: instruct the caller to reboot if kernel parameters or
    kernel versions changed.
 
