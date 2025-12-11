@@ -1,0 +1,89 @@
+---
+# Configure Mellanox SR‑IOV and kernel IOMMU options
+
+- name: Ensure prerequisite tools installed on Debian/Ubuntu/Proxmox
+  apt:
+    name: [iproute2, pciutils]
+    state: present
+  when: ansible_pkg_mgr == 'apt'
+
+- name: Ensure prerequisite tools installed on RedHat based systems
+  package:
+    name: [iproute, pciutils]
+    state: present
+  when: ansible_pkg_mgr != 'apt'
+
+- name: Start Mellanox mst service (if available)
+  command: mst start
+  register: mst_start
+  failed_when: false
+  changed_when: false
+
+- name: Determine PCI addresses for SR‑IOV interfaces
+  command: readlink -f /sys/class/net/{{ item }}/device
+  register: sriov_pf_path
+  loop: "{{ ofed_sriov_interfaces }}"
+  when: ofed_sriov_interfaces | length > 0
+  changed_when: false
+
+- name: Set SR‑IOV PF to variable list
+  set_fact:
+    sriov_pf_devices: >-
+      {{ sriov_pf_path.results | map(attribute='stdout') | list }}
+  when: ofed_sriov_interfaces | length > 0
+
+- name: Append any explicitly defined PF devices
+  set_fact:
+    sriov_pf_devices: "{{ (sriov_pf_devices | default([])) + (ofed_vdpa_pf_devices | default([])) }}"
+
+- name: Enable SR‑IOV and set number of VFs via mlxconfig (best effort)
+  command: "mlxconfig -d {{ item }} set SRIOV_EN=1 NUM_OF_VFS={{ ofed_sriov_num_vfs_map.get(item_interface, ofed_sriov_num_vfs) }}"
+  vars:
+    item_interface: >-
+      {{ ofed_sriov_interfaces[loop.index0] if ofed_sriov_interfaces | length > loop.index0 else item }}
+  loop: "{{ sriov_pf_devices | default([]) }}"
+  when: sriov_pf_devices | length > 0
+  register: mlxconfig_results
+  failed_when: false
+
+- name: Configure number of SR‑IOV VFs for each interface
+  block:
+    - name: Set VF count on interface
+      shell: echo {{ vf_count }} > /sys/class/net/{{ iface_name }}/device/sriov_numvfs
+      vars:
+        iface_name: "{{ item.key }}"
+        vf_count: "{{ item.value }}"
+      when: item.value is defined and item.value|int >= 0
+
+    - name: Set default VF count on interface without explicit mapping
+      shell: echo {{ ofed_sriov_num_vfs }} > /sys/class/net/{{ item }}/device/sriov_numvfs
+      when: item not in ofed_sriov_num_vfs_map
+  when: ofed_sriov_interfaces | length > 0
+  loop: "{{ ofed_sriov_interfaces }}"
+  vars:
+    lookup_map: "{{ ofed_sriov_num_vfs_map | default({}) }}"
+
+- name: Ensure kernel IOMMU options are present in GRUB (Debian/Proxmox)
+  lineinfile:
+    path: /etc/default/grub
+    regexp: '^GRUB_CMDLINE_LINUX_DEFAULT="(.*)"'
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT="\1 {{ ofed_sriov_iommu_options }}"'
+    backrefs: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Update GRUB configuration on Debian
+  command: update-grub
+  when: ansible_os_family == 'Debian'
+
+- name: Add kernel IOMMU options via grubby on RedHat
+  command: grubby --update-kernel=ALL --args="{{ ofed_sriov_iommu_options }}"
+  when: ansible_os_family == 'RedHat'
+
+- name: Reboot after enabling SR‑IOV (if kernel changed)
+  reboot:
+    msg: "Rebooting to apply SR‑IOV kernel parameters"
+    connect_timeout: 5
+    reboot_timeout: 600
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+  when: ofed_update_kernel

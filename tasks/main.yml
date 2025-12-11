@@ -1,0 +1,27 @@
+---
+# Entry point for ansible-role-ofed
+
+- name: Include role variables
+  include_tasks: variables.yml
+
+- name: Install Mellanox OFED on RedHat systems
+  include_tasks: setup-RedHat.yml
+  when: ansible_os_family == 'RedHat'
+
+- name: Install Mellanox OFED on Debian systems
+  include_tasks: setup-Debian.yml
+  when: ansible_os_family == 'Debian'
+
+- name: Manage openib configuration
+  include_tasks: openib.yml
+  when: ofed_manage_openib_conf
+
+# SR‑IOV is a prerequisite for vDPA. Even if the user disables
+# `ofed_enable_sriov`, the SR‑IOV tasks must run when vDPA is enabled.
+- name: Configure SR-IOV (required for SR‑IOV and vDPA)
+  include_tasks: sriov.yml
+  when: ofed_enable_sriov or ofed_enable_vdpa
+
+- name: Configure vDPA
+  include_tasks: vdpa.yml
+  when: ofed_enable_vdpa

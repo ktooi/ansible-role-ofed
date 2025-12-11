@@ -1,0 +1,43 @@
+---
+# Variables specific to Debian/Ubuntu family distributions
+
+# Package manager type
+ofed_pkg_mgr: apt
+
+# Extension for the repository file downloaded from the Mellanox mirror
+ofed_repo_file_extension: list
+
+# URL of the GPG key used to verify packages.
+ofed_gpg_key_url: "{{ ofed_repository_url }}/{{ ofed_version }}/RPM-GPG-KEY-Mellanox"
+
+# Packages provided by the distribution that conflict with MLNX_OFED.  The
+# NVIDIA documentation lists these packages for Ubuntu and Debian and
+# instructs users to remove them before installation.
+ofed_deb_remove_packages:
+  - libipathverbs1
+  - librdmacm1
+  - libibverbs1
+  - libmthca1
+  - libopenmpi-dev
+  - openmpi-bin
+  - openmpi-common
+  - openmpi-doc
+  - libmlx4-1
+  - rdmacm-utils
+  - ibverbs-utils
+  - infiniband-diags
+  - ibutils
+  - perftest
+
+# Packages to install on Debian/Ubuntu.  The sample installation script and
+# vendor documentation install a range of packages including driver
+# meta‑packages, rdma-core, ibverbs utilities and development headers.
+ofed_deb_packages:
+  - mlnx-ofed-kernel-dkms
+  - mlnx-ofed-kernel-utils
+  - mlnx-ofed-basic
+  - rdma-core
+  - ibverbs-utils
+  - ibverbs-providers
+  - libc6-dev
+  - perftest

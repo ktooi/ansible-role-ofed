@@ -1,0 +1,35 @@
+---
+# Red Hat / CentOS / Rocky / AlmaLinux specific installation tasks
+
+- name: Add Mellanox OFED repository via yum_repository
+  yum_repository:
+    name: "{{ ofed_os.ofed_rpm_repo_name }}"
+    description: "Mellanox OFED Repository"
+    file: "{{ ofed_os.ofed_rpm_repo_name }}"
+    baseurl: "{{ ofed_repository_url }}/{{ ofed_version }}/{{ ofed_repo_dist_name }}/"
+    gpgcheck: yes
+    gpgkey: "{{ ofed_os.ofed_gpg_key_url }}"
+    enabled: yes
+  when: ansible_os_family == 'RedHat'
+
+- name: Install Infiniband driver group
+  package:
+    name: "{{ ofed_os.ofed_rpm_group }}"
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: Install additional OFED packages
+  package:
+    name: "{{ ofed_os.ofed_rpm_packages }}"
+    state: present
+  when: ofed_os.ofed_rpm_packages | length > 0
+
+- name: Include kernel update tasks
+  include_tasks: kernel.yml
+  when: ofed_update_kernel
+
+- name: Ensure openibd service is enabled and started
+  service:
+    name: openibd
+    enabled: yes
+    state: started

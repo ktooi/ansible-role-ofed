@@ -1,0 +1,40 @@
+---
+# Debian/Ubuntu specific installation tasks
+
+- name: Ensure GPG key is installed
+  apt_key:
+    url: "{{ ofed_os.ofed_gpg_key_url }}"
+    state: present
+  register: ofed_deb_key
+
+- name: Download Mellanox OFED APT repository file
+  get_url:
+    url: "{{ ofed_repo_url }}"
+    dest: "/etc/apt/sources.list.d/{{ ofed_repo_file_name }}"
+    mode: '0644'
+  register: ofed_deb_repo_file
+
+- name: Remove conflicting distribution packages
+  apt:
+    name: "{{ item }}"
+    state: absent
+    purge: yes
+  loop: "{{ ofed_os.ofed_deb_remove_packages }}"
+  when: ofed_remove_distro_packages
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install Mellanox OFED packages
+  apt:
+    name: "{{ ofed_os.ofed_deb_packages }}"
+    state: present
+  notify: restart openibd
+
+- name: Ensure openibd service is enabled and started
+  service:
+    name: openibd
+    enabled: yes
+    state: started

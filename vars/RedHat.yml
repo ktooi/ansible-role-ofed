@@ -1,0 +1,24 @@
+---
+# Variables specific to Red Hat family distributions
+
+# Package manager type.  Both yum and dnf are supported; ansible_pkg_mgr
+# determines which module will be used at runtime.
+ofed_pkg_mgr: yum
+
+# Extension for the repository file downloaded from the Mellanox mirror
+ofed_repo_file_extension: repo
+
+# URL of the GPG key used to verify packages
+ofed_gpg_key_url: "{{ ofed_repository_url }}/{{ ofed_version }}/RPM-GPG-KEY-Mellanox"
+
+# Name of the package group containing the InfiniBand drivers and tools.  This
+# group is installed using the package manager to bring in all necessary
+# components.
+ofed_rpm_group: "@Infiniband Support"
+
+# Name of the repo as it appears in yum/dnf configuration.  You may override
+# this if you need a different name.
+ofed_rpm_repo_name: mlnx_ofed
+
+# Optionally specify additional packages to install on Red Hat based systems.
+ofed_rpm_packages: []

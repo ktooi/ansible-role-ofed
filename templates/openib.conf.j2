@@ -1,0 +1,54 @@
+{% raw %}#jinja2:lstrip_blocks: True
+# Managed by Ansible, changes may be overwritten
+
+# Start HCA driver upon boot
+ONBOOT=yes
+
+# Allow stopping the driver stack via the service script.  Set to no when the
+# root filesystem is on remote storage.
+ALLOW_STOP=yes
+
+# Run the service script in force mode to enable loading the driver stack even
+# if the available modules were not installed by MLNX_OFED.  Controlled by
+# the `ofed_force_mode` variable.
+FORCE_MODE={% if ofed_force_mode %}yes{% else %}no{% endif %}
+
+# Node description
+NODE_DESC=$(hostname -s)
+
+# Seconds to wait before node description update
+NODE_DESC_TIME_BEFORE_UPDATE=20
+
+# Max time in seconds to wait for node's hostname to be set
+NODE_DESC_UPDATE_TIMEOUT=120
+
+# Seconds to sleep after openibd start finished and before releasing the shell
+POST_START_DELAY=0
+
+# Run /usr/sbin/mlnx_affinity
+RUN_AFFINITY_TUNE=no
+
+# Run /usr/sbin/mlnx_tune
+RUN_MLNX_TUNE=no
+
+# Load E_IPoIB
+LOAD_E_IPOIB=no
+
+# Increase ib_mad thread priority
+RENICE_IB_MAD=no
+
+# Run sysctl performance tuning script
+RUN_SYSCTL=no
+
+# Enable FW debug tracer – set to no to disable, default = yes
+ENABLE_FW_TRACER=yes
+
+# Set MAC address of PF via ECPF
+# SMARTNIC_PF_MAC_CONF= "<bdf1>-<MAC1> <bdf2>-<MAC2> ..."
+# E.g.:
+# SMARTNIC_PF_MAC_CONF="0000:03:00.0-c4:8a:07:a5:29:70 0000:03:00.1-c4:8a:07:a5:29:71"
+
+# Force the user communication manager to load at boot.  Controlled by the
+# `ofed_rdma_ucm_load` variable.
+RDMA_UCM_LOAD={% if ofed_rdma_ucm_load %}yes{% else %}no{% endif %}
+{% endraw %}

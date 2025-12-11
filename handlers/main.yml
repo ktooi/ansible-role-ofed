@@ -1,0 +1,7 @@
+---
+# Handlers for ansible-role-ofed
+
+- name: restart openibd
+  service:
+    name: openibd
+    state: restarted

@@ -1,0 +1,26 @@
+---
+# Load variables and set facts required for role execution
+
+- name: Load OS specific variables
+  include_vars:
+    file: "{{ item }}"
+    name: ofed_os
+  with_first_found:
+    - "{{ ansible_distribution | lower | regex_replace('^([^ ]+) .*', '\\1') }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+    - "default.yml"
+
+- name: Set OFED repository distribution string
+  set_fact:
+    ofed_repo_dist_name: >-
+      {% if ofed_target_release|length > 0 %}
+        {{ ofed_target_release }}
+      {% else %}
+        {{ ansible_distribution | lower }}{{ ansible_distribution_version }}
+      {% endif %}
+  when: ofed_repo_dist_name is not defined
+
+- name: Set OFED repository file name and URL
+  set_fact:
+    ofed_repo_file_name: "mellanox_mlnx_ofed.{{ ofed_os.ofed_repo_file_extension }}"
+    ofed_repo_url: "{{ ofed_repository_url }}/{{ ofed_version }}/{{ ofed_repo_dist_name }}/{{ ofed_repo_file_name }}"

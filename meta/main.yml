@@ -1,0 +1,34 @@
+---
+galaxy_info:
+  role_name: ofed
+  author: ChatGPT
+  description: Install and configure Mellanox OFED drivers on Red Hat and Debian based systems.
+  company: ""
+  license: Apache-2.0
+  min_ansible_version: "2.9"
+  platforms:
+    - name: EL
+      versions:
+        - "7"
+        - "8"
+        - "9"
+    - name: Ubuntu
+      versions:
+        - "20.04"
+        - "22.04"
+        - "24.04"
+    - name: Debian
+      versions:
+        - "11"
+        - "12"
+    - name: Proxmox
+      versions:
+        - "7"
+        - "8"
+  galaxy_tags:
+    - infiniband
+    - ofed
+    - mellanox
+    - drivers
+
+dependencies: []

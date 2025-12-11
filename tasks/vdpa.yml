@@ -1,0 +1,38 @@
+---
+# Configure virtio Data Path Acceleration (vDPA) using Mellanox devices
+
+- name: Ensure vhost_vdpa kernel module is loaded
+  modprobe:
+    name: vhost_vdpa
+    state: present
+  ignore_errors: true
+
+- name: Ensure devlink utility is present (Debian)
+  apt:
+    name: iproute2
+    state: present
+  when: ansible_pkg_mgr == 'apt'
+
+- name: Ensure devlink utility is present (RedHat)
+  package:
+    name: iproute
+    state: present
+  when: ansible_pkg_mgr != 'apt'
+
+- name: Derive PF devices for vDPA from SR‑IOV interfaces when not explicitly set
+  set_fact:
+    ofed_vdpa_pf_devices: "{{ sriov_pf_devices | default([]) }}"
+  when: ofed_vdpa_pf_devices | length == 0 and (sriov_pf_devices | default([])) | length > 0
+
+- name: Set eswitch mode on PFs for vDPA
+  command: "devlink dev eswitch set pci/{{ item }} mode {{ ofed_vdpa_eswitch_mode }}"
+  loop: "{{ ofed_vdpa_pf_devices }}"
+  register: vdpa_eswitch
+  failed_when: false
+
+- name: Add vDPA devices
+  command: >-
+    vdpa dev add name {{ item.name }} mgmtdev pci/{{ item.mgmtdev }}{% if item.mac is defined %} mac {{ item.mac }}{% endif %}
+  loop: "{{ ofed_vdpa_devices }}"
+  register: vdpa_add
+  failed_when: false

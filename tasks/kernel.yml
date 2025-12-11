@@ -1,0 +1,44 @@
+---
+# Tasks to install and activate the kernel that matches the Mellanox driver.
+
+- name: Determine Mellanox kmod kernel version
+  command: rpm -q --qf '%{VERSION}-%{RELEASE}' kmod-mlnx-ofa_kernel
+  register: ofed_kmod_kernel_version
+  failed_when: false
+  changed_when: false
+
+- name: Set kernel package name
+  set_fact:
+    ofed_target_kernel_pkg: "kernel-{{ ofed_kmod_kernel_version.stdout }}"
+  when: ofed_kmod_kernel_version.rc == 0
+
+- name: Install matching kernel package
+  package:
+    name: "{{ ofed_target_kernel_pkg }}"
+    state: present
+    installroot: /
+    use_backend: auto
+  when: ofed_kmod_kernel_version.rc == 0
+
+- name: Configure GRUB to boot Mellanox kernel
+  block:
+    - name: Set default boot entry to 0
+      command: grub2-set-default 0
+
+    - name: Regenerate grub configuration
+      command: grub2-mkconfig -o /boot/grub2/grub.cfg
+
+    - name: Backup existing grub config (if configured)
+      copy:
+        src: /boot/grub2/grub.cfg
+        dest: /etc/grub2.cfg
+        remote_src: yes
+      when: ofed_grub_backup
+
+    - name: Copy grub config to EFI if it exists
+      copy:
+        src: /boot/grub2/grub.cfg
+        dest: /etc/grub2-efi.cfg
+        remote_src: yes
+      when: ansible_facts['ansible_mounts'] | selectattr('mount', 'equalto', '/boot/efi') | list | length > 0
+  when: ofed_kmod_kernel_version.rc == 0

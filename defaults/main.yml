@@ -1,0 +1,108 @@
+---
+# defaults for ansible-role-ofed
+
+# Version of MLNX_OFED to install.  NVIDIA released its final standalone
+# MLNX_OFED long‑term support (LTS) version in October 2024, version
+# 24.10-3.2.5.0, which will receive three years of updates.
+# Starting in 2025 new features are provided only via DOCA‑OFED, but the
+# 24.10 LTS release remains supported.  The role
+# therefore defaults to the latest 24.10 LTS branch, `latest-24.10`, which
+# points to the most recent 24.10 sub‑release (e.g. 24.10-3.2.5.0).
+# You can override this to target a specific release (e.g.
+# `24.10-3.2.5.0` or `23.10-4.0.9.1`) or another `latest-*` branch.
+ofed_version: "latest-24.10"
+
+# Base URL for the Mellanox OFED repository.
+ofed_repository_url: "https://linux.mellanox.com/public/repo/mlnx_ofed"
+
+# Optional override for the distribution name portion of the repository URL.
+# When unset the role derives it from ansible_distribution and
+# ansible_distribution_version.
+ofed_target_release: ""
+
+# Whether to install the kernel that matches the Mellanox drivers.  If true
+# the role will install the kernel that corresponds to the
+# `kmod-mlnx-ofa_kernel` package and update GRUB accordingly.
+ofed_update_kernel: true
+
+# When ofed_update_kernel is true, whether to pass the --nobest flag to dnf
+# when installing kernels on Red Hat family systems.
+ofed_nobest: false
+
+# If true the existing grub configuration will be backed up before writing
+# a new one (only used on Red Hat systems).
+ofed_grub_backup: true
+
+# Manage /etc/infiniband/openib.conf.  When true the role deploys a template
+# and restarts the openibd service.
+ofed_manage_openib_conf: false
+
+# Set FORCE_MODE in openib.conf.  When true the driver stack will be loaded
+# even if other drivers are present.
+ofed_force_mode: false
+
+# Set RDMA_UCM_LOAD in openib.conf.  When true the RDMA UCX user communication
+# manager module will be loaded.
+ofed_rdma_ucm_load: false
+
+# Remove conflicting RDMA/InfiniBand packages provided by the distribution.
+# NVIDIA’s documentation recommends removing distro packages before
+# installing MLNX_OFED.
+ofed_remove_distro_packages: true
+
+# SR-IOV configuration
+# Whether to enable SR-IOV features on Mellanox devices.  When true the role
+# configures the Mellanox device, kernel and system to support single root I/O
+# virtualization.  Kernel options are added to grub and the specified number
+# of virtual functions are created on each physical interface.
+ofed_enable_sriov: false
+
+# List of network interfaces (e.g. `enp161s0f1np1`) or PCI addresses whose
+# corresponding physical functions should be configured for SR‑IOV.  If empty
+# the role will not attempt to configure any devices.  You can discover
+# Mellanox interfaces via `ip link` and `lspci`.
+ofed_sriov_interfaces: []
+
+# Number of virtual functions (VFs) to create per physical function.  This
+# applies to all interfaces in `ofed_sriov_interfaces` unless overridden per
+# device via a structure in `ofed_sriov_num_vfs_map`.
+ofed_sriov_num_vfs: 8
+
+# Optional mapping of interface name or PCI address to custom VF counts.  Use
+# this to specify different numbers of VFs for individual devices.  For
+# example: `{ "enp161s0f1np1": 4, "0000:a1:00.0": 16 }`.
+ofed_sriov_num_vfs_map: {}
+
+# Kernel boot parameters required for SR‑IOV.  These will be appended to the
+# existing kernel command line via grub.  The default enables the Intel
+# IOMMU and passthrough mode, which works on both Intel and AMD systems; you
+# can override this if necessary.
+ofed_sriov_iommu_options: "intel_iommu=on iommu=pt pci=realloc"
+
+# vDPA configuration
+# Whether to enable virtio Data Path Acceleration (vDPA) for Mellanox devices.
+ofed_enable_vdpa: false
+
+# Desired eswitch mode for physical functions when enabling vDPA.  Typical
+# values are `switchdev` or `legacy`.  Hardware offload for vDPA requires
+# `switchdev` mode.  This applies to all PFs referenced in vDPA configuration.
+ofed_vdpa_eswitch_mode: "switchdev"
+
+# List of physical device PCI addresses for which to enable vDPA offload
+# (e.g. `0000:a1:00.0`).  If this is empty the role will infer PFs from
+# `ofed_sriov_interfaces` by reading the PCI address via sysfs.
+ofed_vdpa_pf_devices: []
+
+# Specification of vDPA devices to create.  Each item in the list is a
+# dictionary with keys:
+#   - `name`: Name of the vDPA device (e.g. vdpa0)
+#   - `mgmtdev`: The PCI address of the virtual function to manage (e.g.
+#     `0000:a1:00.2`)
+#   - `mac`: Optional MAC address to assign to the device (if omitted the
+#     kernel will generate one)
+# Example:
+#   ofed_vdpa_devices:
+#     - name: vdpa0
+#       mgmtdev: 0000:a1:00.2
+#       mac: 52:54:00:01:02:03
+ofed_vdpa_devices: []

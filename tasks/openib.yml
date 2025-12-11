@@ -1,0 +1,17 @@
+---
+# Manage /etc/infiniband/openib.conf
+
+- name: Ensure infiniband configuration directory exists
+  file:
+    path: /etc/infiniband
+    state: directory
+    mode: '0755'
+
+- name: Deploy openib.conf
+  template:
+    src: openib.conf.j2
+    dest: /etc/infiniband/openib.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart openibd
